@@ -5,7 +5,7 @@
 The Policy Generator constructs Open Cluster Management policies from Kubernetes YAML files provided through a PolicyGenerator Custom Resource. The Policy Generator is a binary compiled for use as a [kustomize](https://kustomize.io/) exec plugin.
 
 For more about Open Cluster Management and its Policy Framework:
-- [Open Cluster Management website](open-cluster-management.io/)
+- [Open Cluster Management website](https://open-cluster-management.io/)
 - [Governance Policy Framework](https://open-cluster-management.io/getting-started/integration/policy-framework/)
 - [Policy Collection repository](https://github.com/open-cluster-management/policy-collection)
 
@@ -18,7 +18,7 @@ For more about Open Cluster Management and its Policy Framework:
 ##### Install from the GitHub release
 
 1. Download the precompiled plugin binary from the
-  [release](https://github.com/open-cluster-management/policy-generator-plugin/releases)
+  [release](https://github.com/open-cluster-management-io/policy-generator-plugin/releases)
   of your choice.
 
 2. Create the plugin directory:
