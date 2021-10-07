@@ -21,12 +21,18 @@ policyDefaults:
   # annotation. This defaults to ["CM-2 Baseline Configuration"].
   controls:
     - "CM-2 Baseline Configuration"
-  # Optional. This determines if a single configuration policy should be
-  # generated for all the manifests being wrapped in the policy.
-  # If set to false, a configuration policy per manifest will be generated.
-  # This defaults to true.
+  # Optional. Determines the policy controller behavior when comparing the manifest to objects on
+  # the cluster ("musthave",  "mustonlyhave", or "mustnothave"). Defaults to "musthave".
+  complianceType: "musthave"
+  # Optional. This determines if a single configuration policy should be generated for all the
+  # manifests being wrapped in the policy. If set to false, a configuration policy per manifest will
+  # be generated. This defaults to true.
   consolidateManifests: true
-  # Optional. When the policy references a Kyverno policy manifest, this determines if an additonal
+  # Optional. When the policy references a Gatekeeper policy manifest, this determines if an
+  # additional configuration policy should be generated in order to receive policy violations in
+  # Open Cluster Management when the Gatekeeper policy has been violated. This defaults to true.
+  informGatekeeperPolicies: true
+  # Optional. When the policy references a Kyverno policy manifest, this determines if an additional
   # configuration policy should be generated in order to receive policy violations in Open Cluster
   # Management when the Kyverno policy has been violated. This defaults to true.
   informKyvernoPolicies: true
@@ -86,14 +92,15 @@ policies:
     # Optional. (See policyDefaults.categories for description.)
     categories:
       - "CM Configuration Management"
-    # Optional. Determines the policy controller behavior when comparing the manifest to objects on
-    # the cluster ("musthave",  "mustonlyhave", or "mustnothave"). Defaults to "musthave".
+    # Optional. (See policyDefaults.complianceType for description.)
     complianceType: "musthave"
     # Optional. (See policyDefaults.controls for description.)
     controls:
       - "CM-2 Baseline Configuration"
     # Optional. (See policyDefaults.disabled for description.)
     disabled: false
+    # Optional. (See policyDefaults.informGatekeeperPolicies for description.)
+    informGatekeeperPolicies: true
     # Optional. (See policyDefaults.informKyvernoPolicies for description.)
     informKyvernoPolicies: true
     # Optional. (See policyDefaults.consolidateManifests for description.)
