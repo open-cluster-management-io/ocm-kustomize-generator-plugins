@@ -332,7 +332,7 @@ func TestGenerateMissingBindingName(t *testing.T) {
 	}
 
 	expected := fmt.Sprintf(
-		"placementBindingDefaults.name must be set but is empty (mutiple policies were found for the "+
+		"placementBindingDefaults.name must be set but is empty (multiple policies were found for the "+
 			"PlacementBinding to placement '%s')",
 		p.PolicyDefaults.Placement.Name,
 	)

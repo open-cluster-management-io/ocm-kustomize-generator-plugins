@@ -124,7 +124,7 @@ func (p *Plugin) Generate() ([]byte, error) {
 		// specified, throw an error
 		if len(policyConfs) > 1 && p.PlacementBindingDefaults.Name == "" {
 			return nil, fmt.Errorf(
-				"placementBindingDefaults.name must be set but is empty (mutiple policies were found for the PlacementBinding to placement '%s')",
+				"placementBindingDefaults.name must be set but is empty (multiple policies were found for the PlacementBinding to placement '%s')",
 				plrName,
 			)
 		}
