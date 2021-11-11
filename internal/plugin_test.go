@@ -115,17 +115,16 @@ spec:
                 remediationAction: inform
                 severity: low
 ---
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
 metadata:
     name: my-placement-rule
     namespace: my-policies
 spec:
-    clusterConditions:
-        - status: "True"
-          type: ManagedClusterConditionAvailable
-    clusterSelector:
-        matchExpressions: []
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
 ---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PlacementBinding
@@ -133,8 +132,8 @@ metadata:
     name: my-placement-binding
     namespace: my-policies
 placementRef:
-    apiGroup: apps.open-cluster-management.io
-    kind: PlacementRule
+    apiGroup: cluster.open-cluster-management.io
+    kind: Placement
     name: my-placement-rule
 subjects:
     - apiGroup: policy.open-cluster-management.io
@@ -239,29 +238,27 @@ spec:
                 remediationAction: inform
                 severity: low
 ---
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
 metadata:
     name: placement-policy-app-config
     namespace: my-policies
 spec:
-    clusterConditions:
-        - status: "True"
-          type: ManagedClusterConditionAvailable
-    clusterSelector:
-        matchExpressions: []
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
 ---
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
 metadata:
     name: placement-policy-app-config2
     namespace: my-policies
 spec:
-    clusterConditions:
-        - status: "True"
-          type: ManagedClusterConditionAvailable
-    clusterSelector:
-        matchExpressions: []
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
 ---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PlacementBinding
@@ -269,8 +266,8 @@ metadata:
     name: binding-policy-app-config
     namespace: my-policies
 placementRef:
-    apiGroup: apps.open-cluster-management.io
-    kind: PlacementRule
+    apiGroup: cluster.open-cluster-management.io
+    kind: Placement
     name: placement-policy-app-config
 subjects:
     - apiGroup: policy.open-cluster-management.io
@@ -283,8 +280,8 @@ metadata:
     name: binding-policy-app-config2
     namespace: my-policies
 placementRef:
-    apiGroup: apps.open-cluster-management.io
-    kind: PlacementRule
+    apiGroup: cluster.open-cluster-management.io
+    kind: Placement
     name: placement-policy-app-config2
 subjects:
     - apiGroup: policy.open-cluster-management.io
@@ -510,17 +507,16 @@ func TestCreatePlacementRuleDefault(t *testing.T) {
 	output := p.outputBuffer.String()
 	expected := `
 ---
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
 metadata:
     name: placement-policy-app-config
     namespace: my-policies
 spec:
-    clusterConditions:
-        - status: "True"
-          type: ManagedClusterConditionAvailable
-    clusterSelector:
-        matchExpressions: []
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
 `
 	expected = strings.TrimPrefix(expected, "\n")
 	assertEqual(t, output, expected)
@@ -551,17 +547,16 @@ func TestCreatePlacementRuleSinglePlr(t *testing.T) {
 	output := p.outputBuffer.String()
 	expected := `
 ---
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
 metadata:
     name: my-placement-rule
     namespace: my-policies
 spec:
-    clusterConditions:
-        - status: "True"
-          type: ManagedClusterConditionAvailable
-    clusterSelector:
-        matchExpressions: []
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
 `
 	expected = strings.TrimPrefix(expected, "\n")
 	assertEqual(t, output, expected)
@@ -570,8 +565,7 @@ spec:
 func TestCreatePlacementRuleClusterSelectors(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
-	p.allPlrs = map[string]bool{}
-	p.csToPlr = map[string]string{}
+	p.usingPlR = true
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
 	policyConf.Placement.ClusterSelectors = map[string]string{
@@ -691,6 +685,7 @@ spec:
 `
 	plrYAML = strings.TrimPrefix(plrYAML, "\n")
 	p, _ := plrPathHelper(t, plrYAML)
+	p.usingPlR = true
 
 	name, err := p.createPlacementRule(&p.Policies[0])
 	if err != nil {
@@ -714,6 +709,7 @@ metadata:
 `
 	plrYAML = strings.TrimPrefix(plrYAML, "\n")
 	p, _ := plrPathHelper(t, plrYAML)
+	p.usingPlR = true
 
 	p.processedPlrs = map[string]bool{"my-plr": true}
 	name, err := p.createPlacementRule(&p.Policies[0])
@@ -741,6 +737,7 @@ spec:
         matchExpressions: []
 `
 	p, plrPath := plrPathHelper(t, plrYAML)
+	p.usingPlR = true
 
 	_, err := p.createPlacementRule(&p.Policies[0])
 	if err == nil {
@@ -767,6 +764,7 @@ spec:
         matchExpressions: []
 `
 	p, plrPath := plrPathHelper(t, plrYAML)
+	p.usingPlR = true
 
 	_, err := p.createPlacementRule(&p.Policies[0])
 	if err == nil {
@@ -794,6 +792,7 @@ spec:
         matchExpressions: []
 `
 	p, plrPath := plrPathHelper(t, plrYAML)
+	p.usingPlR = true
 
 	_, err := p.createPlacementRule(&p.Policies[0])
 	if err == nil {
@@ -858,8 +857,8 @@ metadata:
     name: my-placement-binding
     namespace: my-policies
 placementRef:
-    apiGroup: apps.open-cluster-management.io
-    kind: PlacementRule
+    apiGroup: cluster.open-cluster-management.io
+    kind: Placement
     name: my-placement-rule
 subjects:
     - apiGroup: policy.open-cluster-management.io
