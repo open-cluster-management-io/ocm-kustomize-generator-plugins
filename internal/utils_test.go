@@ -30,6 +30,7 @@ func TestGetPolicyTemplate(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	manifestFiles := []types.Manifest{}
+	manifestFilesMustNotHave := []types.Manifest{}
 	for i, enemy := range []string{"goldfish", "potato"} {
 		manifestPath := path.Join(tmpDir, fmt.Sprintf("configmap%d.yaml", i))
 		manifestYAML := fmt.Sprintf(
@@ -48,7 +49,14 @@ data:
 			t.Fatalf("Failed to write %s", manifestPath)
 		}
 
-		manifestFiles = append(manifestFiles, types.Manifest{Path: manifestPath})
+		// The applyDefaults method would normally fill in ComplianceType on each manifest entry.
+		manifestFiles = append(
+			manifestFiles, types.Manifest{ComplianceType: "musthave", Path: manifestPath},
+		)
+		manifestFilesMustNotHave = append(
+			manifestFilesMustNotHave,
+			types.Manifest{ComplianceType: "mustnothave", Path: manifestPath},
+		)
 	}
 
 	// Write a bogus file to ensure it is not picked up when creating the policy
@@ -60,9 +68,17 @@ data:
 	}
 
 	// Test both passing in individual files and a flat directory
-	tests := []struct{ Manifests []types.Manifest }{
-		{Manifests: manifestFiles},
-		{Manifests: []types.Manifest{{Path: tmpDir}}},
+	tests := []struct {
+		ExpectedComplianceType string
+		Manifests              []types.Manifest
+	}{
+		{ExpectedComplianceType: "musthave", Manifests: manifestFiles},
+		{ExpectedComplianceType: "mustnothave", Manifests: manifestFilesMustNotHave},
+		// The applyDefaults method would normally fill in ComplianceType on each manifest entry.
+		{
+			ExpectedComplianceType: "musthave",
+			Manifests:              []types.Manifest{{ComplianceType: "musthave", Path: tmpDir}},
+		},
 	}
 	// test ConsolidateManifests = true (default case)
 	// policyTemplates will have only one policyTemplate
@@ -97,22 +113,78 @@ data:
 			t.Fatal("The object-templates field is an invalid format")
 		}
 		assertEqual(t, len(objTemplates), 2)
-		assertEqual(t, objTemplates[0]["complianceType"], "musthave")
+		assertEqual(t, objTemplates[0]["complianceType"], test.ExpectedComplianceType)
 		kind1, ok := objTemplates[0]["objectDefinition"].(map[string]interface{})["kind"]
 		if !ok {
 			t.Fatal("The objectDefinition field is an invalid format")
 		}
 		assertEqual(t, kind1, "ConfigMap")
-		assertEqual(t, objTemplates[1]["complianceType"], "musthave")
+		assertEqual(t, objTemplates[1]["complianceType"], test.ExpectedComplianceType)
 		kind2, ok := objTemplates[1]["objectDefinition"].(map[string]interface{})["kind"]
 		if !ok {
 			t.Fatal("The objectDefinition field is an invalid format")
 		}
 		assertEqual(t, kind2, "ConfigMap")
 	}
+}
+
+func TestGetPolicyTemplateNoConsolidate(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	manifestFiles := []types.Manifest{}
+	for i, enemy := range []string{"goldfish", "potato"} {
+		manifestPath := path.Join(tmpDir, fmt.Sprintf("configmap%d.yaml", i))
+		manifestYAML := fmt.Sprintf(
+			`
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-configmap
+data:
+  game.properties: enemies=%s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-configmap2
+data:
+  game.properties: enemies=%s
+`,
+			enemy,
+			enemy,
+		)
+		err := ioutil.WriteFile(manifestPath, []byte(manifestYAML), 0o666)
+		if err != nil {
+			t.Fatalf("Failed to write %s", manifestPath)
+		}
+
+		// The applyDefaults method would normally fill in ComplianceType on each manifest entry.
+		manifestFiles = append(
+			manifestFiles, types.Manifest{ComplianceType: "musthave", Path: manifestPath},
+		)
+	}
+
+	// Write a bogus file to ensure it is not picked up when creating the policy
+	// template
+	bogusFilePath := path.Join(tmpDir, "README.md")
+	err := ioutil.WriteFile(bogusFilePath, []byte("# My Manifests"), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write %s", bogusFilePath)
+	}
+
+	// Test both passing in individual files and a flat directory
+	tests := []struct {
+		Manifests []types.Manifest
+	}{
+		{Manifests: manifestFiles},
+		// The applyDefaults method would normally fill in ComplianceType on each manifest entry.
+		{
+			Manifests: []types.Manifest{{ComplianceType: "musthave", Path: tmpDir}},
+		},
+	}
 
 	// test ConsolidateManifests = false case
-	// policyTemplates will skip the consolidation and have two policyTemplate
+	// policyTemplates will skip the consolidation and have four policyTemplate
 	// and each policyTemplate has only one objTemplate
 	for _, test := range tests {
 		policyConf := types.PolicyConfig{
@@ -128,48 +200,34 @@ data:
 		if err != nil {
 			t.Fatalf("Failed to get the policy templates: %v", err)
 		}
-		assertEqual(t, len(policyTemplates), 2)
-		policyTemplate1 := policyTemplates[0]
-		objdef1 := policyTemplate1["objectDefinition"]
-		assertEqual(t, objdef1["metadata"].(map[string]string)["name"], "policy-app-config")
-		spec1, ok := objdef1["spec"].(map[string]interface{})
-		if !ok {
-			t.Fatal("The spec field is an invalid format")
-		}
-		assertEqual(t, spec1["remediationAction"], "inform")
-		assertEqual(t, spec1["severity"], "low")
-		objTemplates1, ok := spec1["object-templates"].([]map[string]interface{})
-		if !ok {
-			t.Fatal("The object-templates field is an invalid format")
-		}
-		assertEqual(t, len(objTemplates1), 1)
-		assertEqual(t, objTemplates1[0]["complianceType"], "musthave")
-		kind1, ok := objTemplates1[0]["objectDefinition"].(map[string]interface{})["kind"]
-		if !ok {
-			t.Fatal("The objectDefinition field is an invalid format")
-		}
-		assertEqual(t, kind1, "ConfigMap")
+		assertEqual(t, len(policyTemplates), 4)
 
-		policyTemplate2 := policyTemplates[1]
-		objdef2 := policyTemplate2["objectDefinition"]
-		assertEqual(t, objdef2["metadata"].(map[string]string)["name"], "policy-app-config")
-		spec2, ok := objdef2["spec"].(map[string]interface{})
-		if !ok {
-			t.Fatal("The spec field is an invalid format")
+		for i := 0; i < len(policyTemplates); i++ {
+			policyTemplate := policyTemplates[i]
+			objdef := policyTemplate["objectDefinition"]
+			name := "policy-app-config"
+			if i > 0 {
+				name += fmt.Sprintf("%d", i+1)
+			}
+			assertEqual(t, objdef["metadata"].(map[string]string)["name"], name)
+			spec, ok := objdef["spec"].(map[string]interface{})
+			if !ok {
+				t.Fatal("The spec field is an invalid format")
+			}
+			assertEqual(t, spec["remediationAction"], "inform")
+			assertEqual(t, spec["severity"], "low")
+			objTemplates, ok := spec["object-templates"].([]map[string]interface{})
+			if !ok {
+				t.Fatal("The object-templates field is an invalid format")
+			}
+			assertEqual(t, len(objTemplates), 1)
+			assertEqual(t, objTemplates[0]["complianceType"], "musthave")
+			kind1, ok := objTemplates[0]["objectDefinition"].(map[string]interface{})["kind"]
+			if !ok {
+				t.Fatal("The objectDefinition field is an invalid format")
+			}
+			assertEqual(t, kind1, "ConfigMap")
 		}
-		assertEqual(t, spec2["remediationAction"], "inform")
-		assertEqual(t, spec2["severity"], "low")
-		objTemplates2, ok := spec2["object-templates"].([]map[string]interface{})
-		if !ok {
-			t.Fatal("The object-templates field is an invalid format")
-		}
-		assertEqual(t, len(objTemplates2), 1)
-		assertEqual(t, objTemplates2[0]["complianceType"], "musthave")
-		kind2, ok := objTemplates2[0]["objectDefinition"].(map[string]interface{})["kind"]
-		if !ok {
-			t.Fatal("The objectDefinition field is an invalid format")
-		}
-		assertEqual(t, kind2, "ConfigMap")
 	}
 }
 
@@ -251,6 +309,150 @@ data:
 		t.Fatal("The annotations field is an invalid format")
 	}
 	assertReflectEqual(t, annotations, map[string]interface{}{"monica": "geller"})
+}
+
+func TestGetPolicyTemplateMetadataPatches(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	manifestPath := path.Join(tmpDir, "patch-configmap.yaml")
+	manifestYAML := `
+---
+apiVersion: v1
+kind: configmap
+metadata:
+  name: test-configmap
+  namespace: test-namespace
+data:
+  image: "quay.io/potatos1"
+`
+	err := ioutil.WriteFile(manifestPath, []byte(manifestYAML), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write %s", manifestPath)
+	}
+
+	patches := []map[string]interface{}{
+		{
+			"metadata": map[string]interface{}{
+				"name":      "patch-configmap",
+				"namespace": "patch-namespace",
+			},
+			"data": map[string]interface{}{
+				"image": "quay.io/potatos2",
+			},
+		},
+	}
+
+	manifests := []types.Manifest{
+		{Path: manifestPath, Patches: patches},
+	}
+	policyConf := types.PolicyConfig{
+		Manifests: manifests,
+		Name:      "policy-app-config",
+	}
+
+	policyTemplates, err := getPolicyTemplates(&policyConf)
+	if err != nil {
+		t.Fatalf("Failed to get the policy templates: %v ", err)
+	}
+	assertEqual(t, len(policyTemplates), 1)
+
+	policyTemplate := policyTemplates[0]
+	objdef := policyTemplate["objectDefinition"]
+	assertEqual(t, objdef["metadata"].(map[string]string)["name"], "policy-app-config")
+	spec, ok := objdef["spec"].(map[string]interface{})
+	if !ok {
+		t.Fatal("The spec field is an invalid format")
+	}
+
+	objTemplates, ok := spec["object-templates"].([]map[string]interface{})
+	if !ok {
+		t.Fatal("The object-templates field is an invalid format")
+	}
+	assertEqual(t, len(objTemplates), 1)
+
+	objDef, ok := objTemplates[0]["objectDefinition"].(map[string]interface{})
+	if !ok {
+		t.Fatal("The objectDefinition field is an invalid format")
+	}
+
+	metadata, ok := objDef["metadata"].(map[string]interface{})
+	if !ok {
+		t.Fatal("The metadata field is an invalid format")
+	}
+
+	name, ok := metadata["name"].(string)
+	if !ok {
+		t.Fatal("The metadata.name field is an invalid format")
+	}
+	assertEqual(t, name, "patch-configmap")
+
+	namespace, ok := metadata["namespace"].(string)
+	if !ok {
+		t.Fatal("The metadata.namespace field is an invalid format")
+	}
+	assertEqual(t, namespace, "patch-namespace")
+
+	data, ok := objDef["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("The data field is an invalid format")
+	}
+
+	image, ok := data["image"].(string)
+	if !ok {
+		t.Fatal("The data.image field is an invalid format")
+	}
+	assertEqual(t, image, "quay.io/potatos2")
+}
+
+func TestGetPolicyTemplateMetadataPatchesFail(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	manifestPath := path.Join(tmpDir, "multi-configmaps.yaml")
+	manifestYAML := `
+---
+apiVersion: v1
+kind: configmap
+metadata:
+  name: test-configmap
+  namespace: test-namespace
+data:
+  image: "quay.io/potatos1"
+---
+apiVersion: v1
+kind: configmap
+metadata:
+  name: test2-configmap
+  namespace: test2-namespace
+data:
+  image: "quay.io/potatos1"
+`
+	err := ioutil.WriteFile(manifestPath, []byte(manifestYAML), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write %s", manifestPath)
+	}
+
+	patches := []map[string]interface{}{
+		{
+			"metadata": map[string]interface{}{
+				"name":      "patch-configmap",
+				"namespace": "patch-namespace",
+			},
+			"data": map[string]interface{}{
+				"image": "quay.io/potatos2",
+			},
+		},
+	}
+
+	manifests := []types.Manifest{
+		{Path: manifestPath, Patches: patches},
+	}
+	policyConf := types.PolicyConfig{
+		Manifests: manifests,
+		Name:      "policy-app-config",
+	}
+
+	_, err = getPolicyTemplates(&policyConf)
+	assertEqual(t, err != nil, true)
 }
 
 func TestGetPolicyTemplateKyverno(t *testing.T) {
@@ -337,7 +539,7 @@ func TestGetPolicyTemplateInvalidPath(t *testing.T) {
 	manifestPath := path.Join(tmpDir, "does-not-exist.yaml")
 	policyConf := types.PolicyConfig{
 		ComplianceType:    "musthave",
-		Manifests:         []types.Manifest{{Path: manifestPath}},
+		Manifests:         []types.Manifest{{ComplianceType: "musthave", Path: manifestPath}},
 		Name:              "policy-app-config",
 		RemediationAction: "inform",
 		Severity:          "low",
