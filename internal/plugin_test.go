@@ -330,7 +330,7 @@ func TestGenerateMissingBindingName(t *testing.T) {
 
 	expected := fmt.Sprintf(
 		"placementBindingDefaults.name must be set but is empty (multiple policies were found for the "+
-			"PlacementBinding to placement '%s')",
+			"PlacementBinding to placement %s)",
 		p.PolicyDefaults.Placement.Name,
 	)
 	assertEqual(t, err.Error(), expected)
@@ -490,15 +490,15 @@ func TestCreatePolicyInvalidYAML(t *testing.T) {
 	assertEqual(t, err.Error(), expected)
 }
 
-func TestCreatePlacementRuleDefault(t *testing.T) {
+func TestCreatePlacementDefault(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
-	p.allPlrs = map[string]bool{}
-	p.csToPlr = map[string]string{}
+	p.allPlcs = map[string]bool{}
+	p.csToPlc = map[string]string{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
 
-	name, err := p.createPlacementRule(&policyConf)
+	name, err := p.createPlacement(&policyConf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -522,21 +522,21 @@ spec:
 	assertEqual(t, output, expected)
 }
 
-func TestCreatePlacementRuleSinglePlr(t *testing.T) {
+func TestCreatePlacementSinglePlr(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
-	p.allPlrs = map[string]bool{}
-	p.csToPlr = map[string]string{}
+	p.allPlcs = map[string]bool{}
+	p.csToPlc = map[string]string{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	p.PolicyDefaults.Placement.Name = "my-placement-rule"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
 
-	name, err := p.createPlacementRule(&policyConf)
+	name, err := p.createPlacement(&policyConf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	name2, err := p.createPlacementRule(&policyConf)
+	name2, err := p.createPlacement(&policyConf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -562,10 +562,12 @@ spec:
 	assertEqual(t, output, expected)
 }
 
-func TestCreatePlacementRuleClusterSelectors(t *testing.T) {
+func TestCreatePlacementClusterSelectors(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
 	p.usingPlR = true
+	p.allPlcs = map[string]bool{}
+	p.csToPlc = map[string]string{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
 	policyConf.Placement.ClusterSelectors = map[string]string{
@@ -574,7 +576,7 @@ func TestCreatePlacementRuleClusterSelectors(t *testing.T) {
 		"game":   "pacman",
 	}
 
-	name, err := p.createPlacementRule(&policyConf)
+	name, err := p.createPlacement(&policyConf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -609,11 +611,11 @@ spec:
 	assertEqual(t, output, expected)
 }
 
-func TestCreatePlacementRuleDuplicateName(t *testing.T) {
+func TestCreatePlacementDuplicateName(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
-	p.allPlrs = map[string]bool{}
-	p.csToPlr = map[string]string{}
+	p.allPlcs = map[string]bool{}
+	p.csToPlc = map[string]string{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{
 		Name: "policy-app-config",
@@ -629,17 +631,17 @@ func TestCreatePlacementRuleDuplicateName(t *testing.T) {
 		},
 	}
 
-	_, err := p.createPlacementRule(&policyConf)
+	_, err := p.createPlacement(&policyConf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	_, err = p.createPlacementRule(&policyConf2)
+	_, err = p.createPlacement(&policyConf2)
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
 
-	assertEqual(t, err.Error(), "a duplicate placement rule name was detected: my-placement")
+	assertEqual(t, err.Error(), "a duplicate placement name was detected: my-placement")
 }
 
 func plrPathHelper(t *testing.T, plrYAML string) (*Plugin, string) {
@@ -653,8 +655,8 @@ func plrPathHelper(t *testing.T, plrYAML string) (*Plugin, string) {
 	}
 
 	p := Plugin{}
-	p.allPlrs = map[string]bool{}
-	p.processedPlrs = map[string]bool{}
+	p.allPlcs = map[string]bool{}
+	p.processedPlcs = map[string]bool{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
 	policyConf.Placement.PlacementRulePath = plrPath
@@ -663,7 +665,7 @@ func plrPathHelper(t *testing.T, plrYAML string) (*Plugin, string) {
 	return &p, plrPath
 }
 
-func TestCreatePlacementRulePlrPath(t *testing.T) {
+func TestCreatePlacementPlrPath(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 ---
@@ -687,7 +689,7 @@ spec:
 	p, _ := plrPathHelper(t, plrYAML)
 	p.usingPlR = true
 
-	name, err := p.createPlacementRule(&p.Policies[0])
+	name, err := p.createPlacement(&p.Policies[0])
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -697,7 +699,7 @@ spec:
 	assertEqual(t, output, plrYAML)
 }
 
-func TestCreatePlacementRulePlrPathSkip(t *testing.T) {
+func TestCreatePlacementPlrPathSkip(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 ---
@@ -711,8 +713,8 @@ metadata:
 	p, _ := plrPathHelper(t, plrYAML)
 	p.usingPlR = true
 
-	p.processedPlrs = map[string]bool{"my-plr": true}
-	name, err := p.createPlacementRule(&p.Policies[0])
+	p.processedPlcs = map[string]bool{"my-plr": true}
+	name, err := p.createPlacement(&p.Policies[0])
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -721,7 +723,7 @@ metadata:
 	assertEqual(t, p.outputBuffer.String(), "")
 }
 
-func TestCreatePlacementRulePlrPathNoName(t *testing.T) {
+func TestCreatePlacementPlrPathNoName(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 ---
@@ -739,7 +741,7 @@ spec:
 	p, plrPath := plrPathHelper(t, plrYAML)
 	p.usingPlR = true
 
-	_, err := p.createPlacementRule(&p.Policies[0])
+	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
@@ -748,7 +750,7 @@ spec:
 	assertEqual(t, err.Error(), expected)
 }
 
-func TestCreatePlacementRulePlrPathNoNamespace(t *testing.T) {
+func TestCreatePlacementPlrPathNoNamespace(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 ---
@@ -766,7 +768,7 @@ spec:
 	p, plrPath := plrPathHelper(t, plrYAML)
 	p.usingPlR = true
 
-	_, err := p.createPlacementRule(&p.Policies[0])
+	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
@@ -775,7 +777,7 @@ spec:
 	assertEqual(t, err.Error(), expected)
 }
 
-func TestCreatePlacementRulePlrPathWrongNamespace(t *testing.T) {
+func TestCreatePlacementPlrPathWrongNamespace(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 ---
@@ -794,7 +796,7 @@ spec:
 	p, plrPath := plrPathHelper(t, plrYAML)
 	p.usingPlR = true
 
-	_, err := p.createPlacementRule(&p.Policies[0])
+	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
@@ -807,7 +809,7 @@ spec:
 	assertEqual(t, err.Error(), expected)
 }
 
-func TestCreatePlacementRulePlrPathNoPlr(t *testing.T) {
+func TestCreatePlacementPlrPathNoPlr(t *testing.T) {
 	t.Parallel()
 	plrYAML := `
 apiVersion: v1
@@ -821,12 +823,12 @@ data:
 `
 	p, plrPath := plrPathHelper(t, plrYAML)
 
-	_, err := p.createPlacementRule(&p.Policies[0])
+	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
 
-	expected := fmt.Sprintf("the placement manifest %s did not have a placement rule", plrPath)
+	expected := fmt.Sprintf("the placement manifest %s did not have a placement", plrPath)
 	assertEqual(t, err.Error(), expected)
 }
 
