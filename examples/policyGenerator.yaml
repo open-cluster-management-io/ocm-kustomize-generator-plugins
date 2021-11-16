@@ -6,15 +6,16 @@ placementBindingDefaults:
   name: my-placement-binding
 policyDefaults:
   # categories: []
+  # complianceType: "musthave"
   controls: 
     - PR.DS-1 Data-at-rest
   namespace: my-policies
   # Use an existing placement rule so that placement bindings can be consolidated
   placement:
-    placementRulePath: input/placementrule.yaml
-  # Example of using clusterSelectors to generate a placement rule
+    placementPath: input/placement.yaml
+  # Example of using labelSelector to generate a placement
   # placement:
-  #   clusterSelectors:
+  #   labelSelector:
   #     cloud: red hat
   remediationAction: inform
   severity: medium
