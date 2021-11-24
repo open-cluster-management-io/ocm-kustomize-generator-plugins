@@ -611,6 +611,53 @@ spec:
 	assertEqual(t, output, expected)
 }
 
+func TestCreatePlacementLabelSelector(t *testing.T) {
+	t.Parallel()
+	p := Plugin{}
+	p.allPlcs = map[string]bool{}
+	p.csToPlc = map[string]string{}
+	p.PolicyDefaults.Namespace = "my-policies"
+	policyConf := types.PolicyConfig{Name: "policy-app-config"}
+	policyConf.Placement.LabelSelector = map[string]string{
+		"cloud":  "red hat",
+		"doesIt": "",
+		"game":   "pacman",
+	}
+
+	name, err := p.createPlacement(&policyConf)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	assertEqual(t, name, "placement-policy-app-config")
+	output := p.outputBuffer.String()
+	expected := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: placement-policy-app-config
+    namespace: my-policies
+spec:
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions:
+                    - key: cloud
+                      operator: In
+                      values:
+                        - red hat
+                    - key: doesIt
+                      operator: Exist
+                    - key: game
+                      operator: In
+                      values:
+                        - pacman
+`
+	expected = strings.TrimPrefix(expected, "\n")
+	assertEqual(t, output, expected)
+}
+
 func TestCreatePlacementDuplicateName(t *testing.T) {
 	t.Parallel()
 	p := Plugin{}
@@ -644,10 +691,10 @@ func TestCreatePlacementDuplicateName(t *testing.T) {
 	assertEqual(t, err.Error(), "a duplicate placement name was detected: my-placement")
 }
 
-func plrPathHelper(t *testing.T, plrYAML string) (*Plugin, string) {
+func plPathHelper(t *testing.T, plrYAML string, usingPlR bool) (*Plugin, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	plrPath := path.Join(tmpDir, "plr.yaml")
+	plrPath := path.Join(tmpDir, "pl.yaml")
 	plrYAML = strings.TrimPrefix(plrYAML, "\n")
 	err := ioutil.WriteFile(plrPath, []byte(plrYAML), 0o666)
 	if err != nil {
@@ -655,11 +702,16 @@ func plrPathHelper(t *testing.T, plrYAML string) (*Plugin, string) {
 	}
 
 	p := Plugin{}
+	p.usingPlR = usingPlR
 	p.allPlcs = map[string]bool{}
 	p.processedPlcs = map[string]bool{}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{Name: "policy-app-config"}
-	policyConf.Placement.PlacementRulePath = plrPath
+	if usingPlR {
+		policyConf.Placement.PlacementRulePath = plrPath
+	} else {
+		policyConf.Placement.PlacementPath = plrPath
+	}
 	p.Policies = append(p.Policies, policyConf)
 
 	return &p, plrPath
@@ -686,8 +738,7 @@ spec:
                 - pacman
 `
 	plrYAML = strings.TrimPrefix(plrYAML, "\n")
-	p, _ := plrPathHelper(t, plrYAML)
-	p.usingPlR = true
+	p, _ := plPathHelper(t, plrYAML, true)
 
 	name, err := p.createPlacement(&p.Policies[0])
 	if err != nil {
@@ -710,8 +761,7 @@ metadata:
     namespace: my-policies
 `
 	plrYAML = strings.TrimPrefix(plrYAML, "\n")
-	p, _ := plrPathHelper(t, plrYAML)
-	p.usingPlR = true
+	p, _ := plPathHelper(t, plrYAML, true)
 
 	p.processedPlcs = map[string]bool{"my-plr": true}
 	name, err := p.createPlacement(&p.Policies[0])
@@ -738,8 +788,7 @@ spec:
     clusterSelector:
         matchExpressions: []
 `
-	p, plrPath := plrPathHelper(t, plrYAML)
-	p.usingPlR = true
+	p, plrPath := plPathHelper(t, plrYAML, true)
 
 	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
@@ -765,8 +814,7 @@ spec:
     clusterSelector:
         matchExpressions: []
 `
-	p, plrPath := plrPathHelper(t, plrYAML)
-	p.usingPlR = true
+	p, plrPath := plPathHelper(t, plrYAML, true)
 
 	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
@@ -793,8 +841,7 @@ spec:
     clusterSelector:
         matchExpressions: []
 `
-	p, plrPath := plrPathHelper(t, plrYAML)
-	p.usingPlR = true
+	p, plrPath := plPathHelper(t, plrYAML, true)
 
 	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
@@ -821,7 +868,213 @@ data:
   game.properties: |
     enemies=potato
 `
-	p, plrPath := plrPathHelper(t, plrYAML)
+	p, plrPath := plPathHelper(t, plrYAML, true)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf("the placement manifest %s did not have a placement", plrPath)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlPath(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: my-plr
+    namespace: my-policies
+spec:
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions:
+                    - key: game
+                      operator: In
+                      values:
+                        - pacman
+`
+	plrYAML = strings.TrimPrefix(plrYAML, "\n")
+	p, _ := plPathHelper(t, plrYAML, false)
+
+	name, err := p.createPlacement(&p.Policies[0])
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	assertEqual(t, name, "my-plr")
+	output := p.outputBuffer.String()
+	assertEqual(t, output, plrYAML)
+}
+
+func TestCreatePlacementPlPathSkip(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: my-plr
+    namespace: my-policies
+`
+	plrYAML = strings.TrimPrefix(plrYAML, "\n")
+	p, _ := plPathHelper(t, plrYAML, false)
+
+	p.processedPlcs = map[string]bool{"my-plr": true}
+	name, err := p.createPlacement(&p.Policies[0])
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	assertEqual(t, name, "my-plr")
+	assertEqual(t, p.outputBuffer.String(), "")
+}
+
+func TestCreatePlacementPlPathNoName(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    namespace: my-policies
+spec:
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
+`
+	p, plrPath := plPathHelper(t, plrYAML, false)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf("the placement %s must have a name set", plrPath)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlPathNoNamespace(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: my-plr
+spec:
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
+`
+	p, plrPath := plPathHelper(t, plrYAML, false)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf("the placement %s must have a namespace set", plrPath)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlPathWrongNamespace(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: my-plr
+    namespace: wrong-namespace
+spec:
+    predicates:
+        - requiredClusterSelector:
+            labelSelector:
+                matchExpressions: []
+`
+	p, plrPath := plPathHelper(t, plrYAML, false)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf(
+		"the placement %s must have the same namespace as the policy (%s)",
+		plrPath,
+		p.PolicyDefaults.Namespace,
+	)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlPathFoundPlR(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+    name: my-plr
+    namespace: my-policies
+`
+	p, plrPath := plPathHelper(t, plrYAML, false)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf(
+		"the placement %s specified a placementRule kind but expected a placement kind",
+		plrPath,
+	)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlrPathFoundPl(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+    name: my-plr
+    namespace: my-policies
+`
+	p, plrPath := plPathHelper(t, plrYAML, true)
+
+	_, err := p.createPlacement(&p.Policies[0])
+	if err == nil {
+		t.Fatal("Expected an error but did not get one")
+	}
+
+	expected := fmt.Sprintf(
+		"the placement %s specified a placement kind but expected a placementRule kind",
+		plrPath,
+	)
+	assertEqual(t, err.Error(), expected)
+}
+
+func TestCreatePlacementPlPathNoPl(t *testing.T) {
+	t.Parallel()
+	plrYAML := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-configmap2
+  namespace: my-policies
+data:
+  game.properties: |
+    enemies=potato
+`
+	p, plrPath := plPathHelper(t, plrYAML, false)
 
 	_, err := p.createPlacement(&p.Policies[0])
 	if err == nil {
