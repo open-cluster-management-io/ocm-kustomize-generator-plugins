@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,7 +17,11 @@ func TestGenerate(t *testing.T) {
 	tmpDir := t.TempDir()
 	createConfigMap(t, tmpDir, "configmap.yaml")
 	p := Plugin{}
-	p.baseDirectory = tmpDir
+	var err error
+	p.baseDirectory, err = filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	p.PlacementBindingDefaults.Name = "my-placement-binding"
 	p.PolicyDefaults.Placement.Name = "my-placement-rule"
 	p.PolicyDefaults.Namespace = "my-policies"
@@ -158,7 +163,11 @@ func TestGenerateSeparateBindings(t *testing.T) {
 	tmpDir := t.TempDir()
 	createConfigMap(t, tmpDir, "configmap.yaml")
 	p := Plugin{}
-	p.baseDirectory = tmpDir
+	var err error
+	p.baseDirectory, err = filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	p.PolicyDefaults.Namespace = "my-policies"
 	policyConf := types.PolicyConfig{
 		Name: "policy-app-config",
@@ -304,7 +313,11 @@ func TestGenerateMissingBindingName(t *testing.T) {
 	tmpDir := t.TempDir()
 	createConfigMap(t, tmpDir, "configmap.yaml")
 	p := Plugin{}
-	p.baseDirectory = tmpDir
+	var err error
+	p.baseDirectory, err = filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	p.PlacementBindingDefaults.Name = ""
 	p.PolicyDefaults.Placement.Name = "my-placement-rule"
 	p.PolicyDefaults.Namespace = "my-policies"
@@ -326,7 +339,7 @@ func TestGenerateMissingBindingName(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	_, err := p.Generate()
+	_, err = p.Generate()
 	if err == nil {
 		t.Fatal("Expected an error but did not get one")
 	}
