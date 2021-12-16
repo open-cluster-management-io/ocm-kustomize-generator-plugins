@@ -71,3 +71,9 @@ make test
 ```
 
 If there are any updates to the YAML, also make sure to update the [policy-generator.yaml](./docs/policy-generator.yaml) file.
+
+## Post-submit FOSSA License and Security Scan
+
+After the Pull Request is submitted, a [FOSSA](https://fossa.com/) scan is run through a GitHub
+action. The scan will verify that the code and its dependencies comply with open source licensing
+and is free of security vulnerabilities.
