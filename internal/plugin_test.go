@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-cluster-management/policy-generator-plugin/internal/types"
+	"open-cluster-management.io/ocm-kustomize-generator-plugins/internal/types"
 )
 
 func TestGenerate(t *testing.T) {
