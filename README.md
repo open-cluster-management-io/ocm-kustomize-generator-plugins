@@ -12,6 +12,12 @@ For more about Open Cluster Management and its Policy Framework:
 - [Governance Policy Framework](https://open-cluster-management.io/getting-started/integration/policy-framework/)
 - [Policy Collection repository](https://github.com/open-cluster-management/policy-collection)
 
+## Getting Started
+
+Go to the
+[Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
+to learn how to get involved.
+
 ## Using the Policy Generator
 
 ### As a Kustomize plugin
